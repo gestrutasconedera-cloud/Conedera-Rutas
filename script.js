@@ -6,23 +6,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =============================================
     // CONFIGURACIÓN DE PRODUCCIÓN
     // =============================================
-    // En producción, si el dashboard está en el mismo dominio que la API, use '/api'.
-    // Si la API está en otro dominio, cambie '/api' por 'https://api.sudominio.com/api'.
-    // Busca esta línea al principio de web/script.js y cámbiala:
-// web/script.js
-const API_BASE = window.location.origin.includes('localhost') 
-    ? 'http://localhost:5000/api' 
-    : 'https://conedera-rutas.onrender.com/api';
+    const API_BASE = window.location.origin.includes('localhost')
+        ? 'http://localhost:5000/api'
+        : 'https://conedera-rutas.onrender.com/api';
 
     const apiCall = (path, opts = {}) => fetch(API_BASE + path, {
         headers: { 'Content-Type': 'application/json' },
         ...opts
-    }).then(r => r.json()).catch(e => console.error('API Error:', e));
+    }).then(r => r.json()).catch(e => {
+        console.error('API Error:', e);
+        return { success: false, error: e.message };
+    });
 
     const resolveImg = (src) => {
         if (!src) return '';
         if (src.startsWith('data:image') || src.startsWith('http')) return src;
-        // If it starts with /uploads, prepend the base domain
         if (src.startsWith('/uploads')) {
             const domain = API_BASE.replace('/api', '');
             return domain + src;
@@ -31,7 +29,6 @@ const API_BASE = window.location.origin.includes('localhost')
     };
 
     let currentUser = null;
-
     let users = [];
     let tasks = [];
     let completedTasks = [];
@@ -47,17 +44,27 @@ const API_BASE = window.location.origin.includes('localhost')
     let mapInitialized = false;
 
     async function initAppFromDB() {
+        console.log('🔄 Sincronizando con la API:', API_BASE);
         const fetchRes = async (path, setter) => {
             try {
                 const res = await fetch(API_BASE + path);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 if (data.success && data.data) setter(data.data);
             } catch (e) {
-                console.error('Error fetching ' + path, e);
+                console.error('❌ Error cargando ' + path, e);
+                // Si falla el login por red, mostraremos el error en la UI
+                if (path === '/users') {
+                    const errorEl = document.getElementById('login-error');
+                    if (errorEl) {
+                        errorEl.textContent = 'Error de conexión con el servidor. Reintente en unos segundos.';
+                        errorEl.style.display = 'flex';
+                    }
+                }
             }
         };
         await Promise.all([
-            fetchRes('/users', d => users = d),
+            fetchRes('/users', d => { users = d; console.log(`👥 Usuarios cargados: ${d.length}`); }),
             fetchRes('/tasks', d => tasks = d),
             fetchRes('/completed-tasks', d => completedTasks = d),
             fetchRes('/movements', d => movements = d),
@@ -107,13 +114,30 @@ const API_BASE = window.location.origin.includes('localhost')
         e.preventDefault();
         const email = document.getElementById('login-email').value.trim();
         const pwd = document.getElementById('login-password').value;
-        const user = users.find(u => u.email === email && u.password === pwd && u.status === 'activo');
+
+        console.log('🔑 Intento de login para:', email);
+
+        if (users.length === 0) {
+            loginError.textContent = 'La base de datos aún no ha cargado. Espere un momento.';
+            loginError.style.display = 'flex';
+            return;
+        }
+
+        const user = users.find(u =>
+            u.email.toLowerCase() === email.toLowerCase() &&
+            u.password === pwd &&
+            (u.status === 'activo' || !u.status)
+        );
+
         if (user) {
+            console.log('✅ Login exitoso:', user.name);
             currentUser = user;
             sessionStorage.setItem('loggedUserId', user.id);
             loginError.style.display = 'none';
             initApp();
         } else {
+            console.warn('❌ Credenciales incorrectas o usuario inactivo');
+            loginError.textContent = 'Usuario o contraseña incorrectos.';
             loginError.style.display = 'flex';
             loginScreen.querySelector('.login-card').classList.add('shake');
             setTimeout(() => loginScreen.querySelector('.login-card').classList.remove('shake'), 600);
@@ -124,7 +148,10 @@ const API_BASE = window.location.origin.includes('localhost')
     const savedId = sessionStorage.getItem('loggedUserId');
     if (savedId) {
         const u = users.find(u => u.id === parseInt(savedId));
-        if (u && u.status === 'activo') { currentUser = u; initApp(); }
+        if (u && (u.status === 'activo' || !u.status)) {
+            currentUser = u;
+            initApp();
+        }
     }
 
     function initApp() {
@@ -1741,7 +1768,3 @@ const API_BASE = window.location.origin.includes('localhost')
         }
     });
 });
-
-
-
-
