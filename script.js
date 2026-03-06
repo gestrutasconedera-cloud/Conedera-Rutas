@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =============================================
     // En producción, si el dashboard está en el mismo dominio que la API, use '/api'.
     // Si la API está en otro dominio, cambie '/api' por 'https://api.sudominio.com/api'.
-    const API_BASE = window.location.origin.includes('localhost') ? 'http://localhost:5000/api' : '/api';
+    const API_BASE = "https://conedera-rutas.onrender.com/api";
 
     const apiCall = (path, opts = {}) => fetch(API_BASE + path, {
         headers: { 'Content-Type': 'application/json' },
@@ -1737,3 +1737,4 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 });
+
