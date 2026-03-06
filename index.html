@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONEDERA - Sistema de Logística</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+
+<body>
+    <!-- ========== LOGIN SCREEN ========== -->
+    <div class="login-screen" id="login-screen">
+        <div class="login-card">
+            <div class="login-logo"><i data-lucide="package-search"></i>
+                <h1>CONEDERA</h1>
+            </div>
+            <p class="login-subtitle">Sistema de Logística y Entregas</p>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-email">Correo Electrónico</label>
+                    <div class="input-with-icon"><i data-lucide="mail"></i>
+                        <input type="email" id="login-email" placeholder="correo@empresa.com" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Contraseña</label>
+                    <div class="input-with-icon"><i data-lucide="lock"></i>
+                        <input type="password" id="login-password" placeholder="••••••••" required>
+                    </div>
+                </div>
+                <div class="login-error" id="login-error" style="display:none;">
+                    <i data-lucide="alert-triangle"></i>
+                    <span id="login-error-msg">Credenciales incorrectas o usuario inactivo</span>
+                </div>
+                <button type="submit" class="btn-login"><i data-lucide="log-in"></i> Iniciar Sesión</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== APP ========== -->
+    <div class="app-container" id="app-container" style="display:none;">
+        <nav class="sidebar">
+            <div class="logo"><i data-lucide="package-search"></i><span>CONEDERA</span></div>
+            <ul class="nav-links">
+                <li class="active" data-view="pending"><i data-lucide="clock"></i><span>Pendientes</span></li>
+                <li data-view="completed"><i data-lucide="check-circle-2"></i><span>Realizadas</span></li>
+                <li data-view="warehouse"><i data-lucide="warehouse"></i><span>E/S Transportista</span></li>
+                <li data-view="vehicles" id="nav-vehicles"><i data-lucide="car"></i><span>Vehículos</span></li>
+                <li data-view="monitoring" id="nav-monitoring"><i data-lucide="map"></i><span>Monitoreo</span></li>
+                <li data-view="notifications" id="nav-notifications-view"><i
+                        data-lucide="bell-ring"></i><span>Notificaciones</span></li>
+                <li data-view="users" id="nav-users"><i data-lucide="users"></i><span>Usuarios</span></li>
+            </ul>
+            <div class="sidebar-bottom">
+                <div class="user-profile">
+                    <img id="sidebar-avatar" src="https://ui-avatars.com/api/?name=U&background=4f46e5&color=fff"
+                        alt="User">
+                    <div class="user-info">
+                        <p class="name" id="sidebar-name">—</p>
+                        <p class="role" id="sidebar-role">—</p>
+                    </div>
+                </div>
+                <button class="btn-logout" id="btn-logout"><i data-lucide="log-out"></i><span>Salir</span></button>
+            </div>
+        </nav>
+
+        <main class="main-content">
+            <header>
+                <h1 id="page-title">Tareas Pendientes</h1>
+                <div class="header-actions">
+                    <div class="notif-bell-wrapper" id="notif-bell-wrapper">
+                        <button class="icon-btn" id="btn-notif-bell"><i data-lucide="bell"></i><span class="notif-badge"
+                                id="notif-badge" style="display:none;">0</span></button>
+                        <div class="notif-dropdown" id="notif-dropdown" style="display:none;">
+                            <div class="notif-dropdown-header">
+                                <h4>Notificaciones</h4>
+                                <button class="btn-link" id="btn-mark-all-read">Marcar leídas</button>
+                            </div>
+                            <div class="notif-dropdown-list" id="notif-dropdown-list"></div>
+                            <div class="notif-dropdown-footer">
+                                <button class="btn-link" id="btn-view-all-notif">Ver todas</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="icon-btn"><i data-lucide="settings"></i></button>
+                </div>
+            </header>
+
+            <!-- VIEW: PENDING -->
+            <section id="view-pending" class="view active">
+                <div class="section-toolbar">
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-icon warning"><i data-lucide="alert-circle"></i></div>
+                            <div class="stat-info">
+                                <h3>Prioridad Alta</h3>
+                                <p id="stat-high">0 Envíos</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon info"><i data-lucide="clock"></i></div>
+                            <div class="stat-info">
+                                <h3>Total Pendientes</h3>
+                                <p id="stat-total">0 Tareas</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon success"><i data-lucide="package"></i></div>
+                            <div class="stat-info">
+                                <h3>Bultos Totales</h3>
+                                <p id="stat-bultos">0 Bultos</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-buttons" id="pending-admin-actions">
+                        <button class="btn btn-create" id="btn-create-task"><i data-lucide="plus"></i> Nueva
+                            Tarea</button>
+                        <button class="btn btn-export" id="btn-export-pending"><i data-lucide="file-spreadsheet"></i>
+                            Exportar Excel</button>
+                    </div>
+                </div>
+                <div class="task-list" id="task-list"></div>
+            </section>
+
+            <!-- VIEW: COMPLETED -->
+            <section id="view-completed" class="view hidden">
+                <div class="section-toolbar">
+                    <div class="filter-bar">
+                        <input type="date" class="date-picker" id="completed-date-filter">
+                        <div class="summary">Total: <strong id="completed-summary">0 Entregas</strong></div>
+                    </div>
+                    <div class="search-box">
+                        <i data-lucide="search"></i>
+                        <input type="text" id="completed-search"
+                            placeholder="Buscar por transportista, guía, cliente...">
+                    </div>
+                    <div class="action-buttons" id="completed-admin-actions">
+                        <button class="btn btn-export" id="btn-export-completed"><i data-lucide="file-spreadsheet"></i>
+                            Exportar Excel</button>
+                    </div>
+                </div>
+                <div class="history-list" id="completed-list"></div>
+            </section>
+
+            <!-- VIEW: WAREHOUSE E/S -->
+            <section id="view-warehouse" class="view hidden">
+                <div class="section-toolbar">
+                    <div class="action-buttons">
+                        <button class="btn btn-create" id="btn-create-movement"><i data-lucide="plus"></i> Crear
+                            Movimiento</button>
+                    </div>
+                </div>
+                <div class="warehouse-content">
+                    <div class="form-container" id="warehouse-form-container">
+                        <h3>Registro Rápido</h3>
+                        <form id="warehouse-form">
+                            <div class="form-group"><label>Código de Barras / ID Paquete</label>
+                                <div class="input-with-icon"><i data-lucide="scan-barcode"></i><input type="text"
+                                        placeholder="Escanee o ingrese código"></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group"><label>Cantidad</label><input type="number" value="1" min="1">
+                                </div>
+                                <div class="form-group"><label>Ubicación / Estante</label><input type="text"
+                                        placeholder="Ej: A-12"></div>
+                            </div>
+                            <div class="form-group"><label>Observaciones</label><textarea rows="3"
+                                    placeholder="Estado del paquete, notas..."></textarea></div>
+                            <button type="submit" class="btn btn-primary full-width">Registrar Movimiento</button>
+                        </form>
+                    </div>
+                    <div class="recent-movements">
+                        <h3>Movimientos Recientes</h3>
+                        <div class="movement-log" id="movement-log"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: VEHICLES -->
+            <section id="view-vehicles" class="view hidden">
+                <div class="section-toolbar">
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-icon info"><i data-lucide="car"></i></div>
+                            <div class="stat-info">
+                                <h3>Total Vehículos</h3>
+                                <p id="stat-vehicles-total">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon success"><i data-lucide="circle-check"></i></div>
+                            <div class="stat-info">
+                                <h3>Activos</h3>
+                                <p id="stat-vehicles-active">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-buttons" id="vehicles-admin-actions">
+                        <button class="btn btn-create" id="btn-create-vehicle"><i data-lucide="plus"></i> Nuevo
+                            Vehículo</button>
+                    </div>
+                </div>
+                <div class="vehicles-table-wrapper" id="vehicles-table-wrapper"></div>
+            </section>
+
+            <!-- VIEW: USERS -->
+            <section id="view-users" class="view hidden">
+                <div class="section-toolbar">
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-icon info"><i data-lucide="users"></i></div>
+                            <div class="stat-info">
+                                <h3>Total Usuarios</h3>
+                                <p id="stat-users-total">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon success"><i data-lucide="user-check"></i></div>
+                            <div class="stat-info">
+                                <h3>Activos</h3>
+                                <p id="stat-users-active">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon warning"><i data-lucide="user-x"></i></div>
+                            <div class="stat-info">
+                                <h3>Inactivos</h3>
+                                <p id="stat-users-inactive">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="search-box">
+                        <i data-lucide="search"></i>
+                        <input type="text" id="users-search" placeholder="Buscar usuario por nombre...">
+                    </div>
+                    <div class="action-buttons"><button class="btn btn-create" id="btn-create-user"><i
+                                data-lucide="user-plus"></i> Crear Usuario</button></div>
+                </div>
+                <div class="users-table-wrapper" id="users-table-wrapper"></div>
+            </section>
+
+            <!-- VIEW: MONITORING -->
+            <section id="view-monitoring" class="view hidden">
+                <div class="section-toolbar">
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-icon success"><i data-lucide="radio"></i></div>
+                            <div class="stat-info">
+                                <h3>Conductores Activos</h3>
+                                <p id="stat-drivers-online">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon info"><i data-lucide="map-pin"></i></div>
+                            <div class="stat-info">
+                                <h3>Última Actualización</h3>
+                                <p id="stat-last-update">--:--</p>
+                            </div>
+                        </div>
+                        <div class="stat-card stat-card-btn" id="btn-sync-monitoring">
+                            <div class="stat-icon primary"><i data-lucide="refresh-cw"></i></div>
+                            <div class="stat-info">
+                                <h3>Actualizar</h3>
+                                <p>Sincronización Manual</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="map-container">
+                    <div id="monitoring-map" class="monitoring-map"></div>
+                    <div class="map-sidebar" id="map-driver-list"></div>
+                </div>
+            </section>
+
+            <!-- VIEW: NOTIFICATIONS -->
+            <section id="view-notifications" class="view hidden">
+                <div class="section-toolbar">
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-icon info"><i data-lucide="bell"></i></div>
+                            <div class="stat-info">
+                                <h3>Total</h3>
+                                <p id="stat-notif-total">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon warning"><i data-lucide="bell-ring"></i></div>
+                            <div class="stat-info">
+                                <h3>No Leídas</h3>
+                                <p id="stat-notif-unread">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-buttons" id="notif-admin-actions">
+                        <button class="btn btn-create" id="btn-compose-notif"><i data-lucide="send"></i> Enviar
+                            Notificación</button>
+                    </div>
+                </div>
+                <div class="notifications-list" id="notifications-full-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ========== MODAL: CREATE TASK ========== -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i data-lucide="clipboard-plus"></i> Crear Nueva Tarea</h2>
+                <button class="modal-close" id="modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <form id="create-task-form">
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group"><label for="task-client">Cliente *</label><input type="text"
+                                id="task-client" placeholder="Nombre del cliente" required></div>
+                        <div class="form-group"><label for="task-transportista">Transportista *</label>
+                            <select id="task-transportista" required>
+                                <option value="">Seleccionar conductor...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label for="task-bultos">Cant. Bultos Enviados *</label><input
+                                type="number" id="task-bultos" min="1" value="1" required></div>
+                        <div class="form-group"><label for="task-guia">Guía *</label><input type="text" id="task-guia"
+                                placeholder="Nro. de guía" required></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label for="task-priority">Prioridad *</label>
+                            <select id="task-priority" required>
+                                <option value="normal">Normal</option>
+                                <option value="alta">Alta</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label for="task-date">Fecha a Realizar *</label><input type="date"
+                                id="task-date" required></div>
+                    </div>
+                    <div class="form-group"><label for="task-sector">Sector *</label><input type="text" id="task-sector"
+                            placeholder="Ej: Centro, Norte, Sur" required></div>
+                    <div class="form-group"><label for="task-description">Descripción de la Tarea *</label>
+                        <textarea id="task-description" rows="3"
+                            placeholder="Detalles de la entrega, instrucciones especiales..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="btn-cancel-task">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Guardar Tarea</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: EXPORT ========== -->
+    <div class="modal-overlay" id="export-modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i data-lucide="file-spreadsheet"></i> Exportar a Excel</h2>
+                <button class="modal-close" id="export-modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="export-subtitle" id="export-subtitle">Exportar tareas pendientes</p>
+                <button class="btn btn-primary full-width export-all-btn" id="btn-export-all"><i
+                        data-lucide="download"></i> Descargar Todas las Tareas</button>
+                <div class="export-divider"><span>O filtrar antes de exportar</span></div>
+                <div class="export-filters">
+                    <div class="form-row">
+                        <div class="form-group"><label for="filter-transportista">Transportista</label><select
+                                id="filter-transportista">
+                                <option value="">-- Todos --</option>
+                            </select></div>
+                        <div class="form-group"><label for="filter-sector">Sector</label><select id="filter-sector">
+                                <option value="">-- Todos --</option>
+                            </select></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label for="filter-fecha-desde">Fecha Desde</label><input type="date"
+                                id="filter-fecha-desde"></div>
+                        <div class="form-group"><label for="filter-fecha-hasta">Fecha Hasta</label><input type="date"
+                                id="filter-fecha-hasta"></div>
+                    </div>
+                    <div class="form-group"><label for="filter-guia">Guía</label><input type="text" id="filter-guia"
+                            placeholder="Buscar por número de guía..."></div>
+                </div>
+                <div class="export-preview" id="export-preview"><i data-lucide="table-2"></i><span id="export-count">0
+                        tareas coinciden con los filtros</span></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" id="btn-export-cancel">Cancelar</button>
+                <button type="button" class="btn btn-export-action" id="btn-export-filtered"><i
+                        data-lucide="download"></i> Exportar Filtrado</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: CREATE USER ========== -->
+    <div class="modal-overlay" id="user-modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i data-lucide="user-plus"></i> Crear Nuevo Usuario</h2>
+                <button class="modal-close" id="user-modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <form id="create-user-form">
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group"><label for="user-name">Usuario *</label><input type="text"
+                                id="user-name" placeholder="Nombre completo" required></div>
+                        <div class="form-group"><label for="user-password">Clave *</label>
+                            <div class="input-with-icon"><i data-lucide="lock"></i><input type="password"
+                                    id="user-password" placeholder="Contraseña" required></div>
+                        </div>
+                        <div class="form-group"><label for="user-role">Rol *</label>
+                            <select id="user-role" required>
+                                <option value="">Seleccionar rol...</option>
+                                <option value="Administrador">Administrador</option>
+                                <option value="Conductor">Conductor</option>
+                                <option value="Bodeguero">Bodeguero</option>
+                                <option value="Supervisor">Supervisor</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group"><label for="user-email">Correo Electrónico *</label><input type="email"
+                            id="user-email" placeholder="correo@empresa.com" required></div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Fecha de Creación</label><input type="text"
+                                id="user-date-display" readonly disabled></div>
+                        <div class="form-group"><label>Creado Por</label><input type="text" id="user-created-by"
+                                readonly disabled></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="btn-cancel-user">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Guardar Usuario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: EDIT USER ========== -->
+    <div class="modal-overlay" id="edit-user-modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i data-lucide="user-pen"></i> Modificar Usuario</h2>
+                <button class="modal-close" id="edit-user-modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <form id="edit-user-form">
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group"><label>Usuario</label><input type="text" id="edit-user-name" readonly
+                                disabled></div>
+                        <div class="form-group"><label for="edit-user-password">Clave</label>
+                            <div class="input-with-icon"><i data-lucide="lock"></i><input type="password"
+                                    id="edit-user-password" placeholder="Nueva contraseña (vacío = no cambiar)"></div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label for="edit-user-role">Rol *</label>
+                            <select id="edit-user-role" required>
+                                <option value="Administrador">Administrador</option>
+                                <option value="Conductor">Conductor</option>
+                                <option value="Bodeguero">Bodeguero</option>
+                                <option value="Supervisor">Supervisor</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label for="edit-user-email">Correo Electrónico *</label><input
+                                type="email" id="edit-user-email" required></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Fecha Modificación</label><input type="text" id="edit-user-date"
+                                readonly disabled></div>
+                        <div class="form-group"><label>Modificado Por</label><input type="text"
+                                id="edit-user-modified-by" readonly disabled></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="btn-cancel-edit-user">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: COMPLETE TASK (CONDUCTOR) ========== -->
+    <div class="modal-overlay" id="complete-task-overlay">
+        <div class="modal modal-wide">
+            <div class="modal-header">
+                <h2><i data-lucide="clipboard-check"></i> Completar Entrega</h2>
+                <button class="modal-close" id="complete-task-close"><i data-lucide="x"></i></button>
+            </div>
+            <form id="complete-task-form">
+                <div class="modal-body">
+                    <div class="task-summary-box" id="complete-task-summary"></div>
+                    <div class="form-group"><label for="complete-observacion">Observación *</label>
+                        <textarea id="complete-observacion" rows="3" placeholder="Detalle de la entrega, estado, etc."
+                            required></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label for="complete-placa">Placa del Vehículo *</label>
+                            <select id="complete-placa" required>
+                                <option value="">Seleccionar vehículo...</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Responsable</label><input type="text" id="complete-responsable"
+                                readonly disabled></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Fotos (mínimo 1) * <span class="photo-counter" id="photo-counter">0 / 1</span></label>
+                        <div class="photo-grid" id="photo-grid">
+                            <label class="photo-add-btn" for="photo-input"><i
+                                    data-lucide="camera"></i><span>Agregar</span></label>
+                        </div>
+                        <input type="file" id="photo-input" accept="image/*" capture="environment" multiple
+                            style="display:none;">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Fecha y Hora</label><input type="text" id="complete-datetime"
+                                readonly disabled></div>
+                        <div class="form-group"><label>Ubicación GPS</label>
+                            <div class="input-with-icon"><i data-lucide="map-pin"></i><input type="text"
+                                    id="complete-gps" readonly disabled placeholder="Obteniendo..."></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="btn-cancel-complete">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> Completar Entrega</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: CREATE E/S MOVEMENT ========== -->
+    <div class="modal-overlay" id="es-modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i data-lucide="warehouse"></i> Registrar Movimiento</h2>
+                <button class="modal-close" id="es-modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <form id="es-form">
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group"><label for="es-tipo">Tipo de Movimiento *</label>
+                            <select id="es-tipo" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="ingreso">Ingreso (Entrada)</option>
+                                <option value="salida">Salida (Despacho)</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Transportista</label>
+                            <input type="text" id="es-transportista" readonly disabled>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Fotos <span class="photo-counter" id="es-photo-counter">0</span></label>
+                        <div class="photo-grid" id="es-photo-grid">
+                            <label class="photo-add-btn" for="es-photo-input"><i
+                                    data-lucide="camera"></i><span>Agregar</span></label>
+                        </div>
+                        <input type="file" id="es-photo-input" accept="image/*" capture="environment" multiple
+                            style="display:none;">
+                    </div>
+                    <div class="form-group"><label for="es-notas">Notas</label>
+                        <textarea id="es-notas" rows="3" placeholder="Observaciones del movimiento..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Fecha y Hora</label><input type="text" id="es-datetime" readonly
+                                disabled></div>
+                        <div class="form-group"><label>Ubicación GPS</label>
+                            <div class="input-with-icon"><i data-lucide="map-pin"></i><input type="text" id="es-gps"
+                                    readonly disabled placeholder="Obteniendo..."></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="btn-cancel-es">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Registrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: VIEW/EDIT COMPLETED TASK ========== -->
+    <div class="modal-overlay" id="completed-detail-overlay">
+        <div class="modal modal-wide">
+            <div class="modal-header">
+                <h2><i data-lucide="eye"></i> <span id="completed-detail-title">Detalle de Entrega</span></h2>
+                <button class="modal-close" id="completed-detail-close"><i data-lucide="x"></i></button>
+            </div>
+            <form id="completed-detail-form">
+                <div class="modal-body">
+                    <div class="task-summary-box" id="completed-detail-info"></div>
+                    <div class="form-group">
+                        <label>Observación</label>
+                        <textarea id="cd-observacion" rows="3" class="cd-field"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Placa</label>
+                            <select id="cd-placa" class="cd-field">
+                                <option value="">Seleccionar vehículo...</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Responsable</label>
+                            <input type="text" id="cd-responsable" readonly disabled>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Fotos (<span id="cd-photo-count">0</span>)</label>
+                        <div class="photo-grid" id="cd-photo-grid"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Fecha Completado</label>
+                            <input type="text" id="cd-datetime" readonly disabled>
+                        </div>
+                        <div class="form-group"><label>Ubicación GPS</label>
+                            <div class="input-with-icon"><i data-lucide="map-pin"></i>
+                                <input type="text" id="cd-gps" readonly disabled>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Estado</label>
+                            <select id="cd-status" class="cd-field">
+                                <option value="Completado">Completado</option>
+                                <option value="Devuelto">Devuelto</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Transportista</label>
+                            <input type="text" id="cd-transportista" readonly disabled>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="btn-close-cd">Cerrar</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-cd" style="display:none;"><i
+                            data-lucide="save"></i> Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: VIEW MOVEMENT DETAIL ========== -->
+    <div class="modal-overlay" id="movement-detail-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i data-lucide="eye"></i> Detalle de Movimiento</h2>
+                <button class="modal-close" id="movement-detail-close"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="task-summary-box" id="movement-detail-info"></div>
+                <div class="form-group">
+                    <label>Fotos (<span id="md-photo-count">0</span>)</label>
+                    <div class="photo-grid" id="md-photo-grid"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" id="btn-close-md">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: CREATE VEHICLE ========== -->
+    <div class="modal-overlay" id="vehicle-modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i data-lucide="car"></i> Nuevo Vehículo</h2>
+                <button class="modal-close" id="vehicle-modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <form id="create-vehicle-form">
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group"><label for="vehicle-modelo">Modelo del Vehículo *</label>
+                            <input type="text" id="vehicle-modelo" placeholder="Ej: Toyota Hilux 2024" required>
+                        </div>
+                        <div class="form-group"><label for="vehicle-placa">Placa *</label>
+                            <input type="text" id="vehicle-placa" placeholder="Ej: ABC-1234" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Foto del Vehículo * <span class="photo-counter" id="veh-photo-counter">0</span></label>
+                        <div class="photo-grid" id="veh-photo-grid">
+                            <label class="photo-add-btn" for="veh-photo-input"><i
+                                    data-lucide="camera"></i><span>Agregar</span></label>
+                        </div>
+                        <input type="file" id="veh-photo-input" accept="image/*" capture="environment"
+                            style="display:none;">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="btn-cancel-vehicle">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Guardar Vehículo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: EDIT VEHICLE ========== -->
+    <div class="modal-overlay" id="edit-vehicle-modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i data-lucide="car"></i> Modificar Vehículo</h2>
+                <button class="modal-close" id="edit-vehicle-modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <form id="edit-vehicle-form">
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group"><label for="edit-vehicle-modelo">Modelo del Vehículo *</label>
+                            <input type="text" id="edit-vehicle-modelo" required>
+                        </div>
+                        <div class="form-group"><label for="edit-vehicle-placa">Placa *</label>
+                            <input type="text" id="edit-vehicle-placa" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Foto del Vehículo * <span class="photo-counter"
+                                id="edit-veh-photo-counter">0</span></label>
+                        <div class="photo-grid" id="edit-veh-photo-grid"></div>
+                        <input type="file" id="edit-veh-photo-input" accept="image/*" capture="environment"
+                            style="display:none;">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="btn-cancel-edit-vehicle">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== PHOTO LIGHTBOX (ALL USERS) ========== -->
+    <div class="photo-lightbox" id="photo-lightbox" style="display:none;">
+        <div class="lightbox-backdrop"></div>
+        <div class="lightbox-content">
+            <img src="" alt="Foto" id="lightbox-img">
+            <div class="lightbox-actions">
+                <a class="btn btn-primary lightbox-download" id="lightbox-download" download="foto.jpg"><i
+                        data-lucide="download"></i> Descargar</a>
+                <button class="btn btn-outline lightbox-close-btn" id="lightbox-close-btn"><i data-lucide="x"></i>
+                    Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: COMPOSE NOTIFICATION ========== -->
+    <div class="modal-overlay" id="compose-notif-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i data-lucide="send"></i> Enviar Notificación</h2>
+                <button class="modal-close" id="compose-notif-close"><i data-lucide="x"></i></button>
+            </div>
+            <form id="compose-notif-form">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="notif-dest">Destinatario *</label>
+                        <select id="notif-dest" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="__ALL__">📢 Todos los Usuarios</option>
+                            <option value="__CONDUCTORES__">🚛 Todos los Conductores</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="notif-type">Tipo</label>
+                        <select id="notif-type">
+                            <option value="info">ℹ️ Informativo</option>
+                            <option value="warning">⚠️ Advertencia</option>
+                            <option value="urgent">🔴 Urgente</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="notif-message">Mensaje *</label>
+                        <textarea id="notif-message" rows="4" placeholder="Escriba el mensaje de notificación..."
+                            required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="btn-cancel-notif">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="send"></i> Enviar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+
+</html>
