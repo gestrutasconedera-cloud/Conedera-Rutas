@@ -6,8 +6,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =============================================
     // CONFIGURACIÓN DE PRODUCCIÓN
     // =============================================
-    const API_BASE = window.location.origin.includes:'https://conedera-rutas.onrender.com/api';
-
+    // web/script.js
+const API_BASE = window.location.origin.includes('localhost') 
+    ? 'https://conedera-rutas.onrender.com/api';
+    
     const apiCall = (path, opts = {}) => fetch(API_BASE + path, {
         headers: { 'Content-Type': 'application/json' },
         ...opts
@@ -1766,4 +1768,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 });
+
 
