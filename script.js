@@ -334,7 +334,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         Object.keys(navItems).forEach(key => {
             if (navItems[key]) {
-                navItems[key].style.display = hasPermission(key, 'view') ? '' : 'none';
+                if (key === 'permissions') {
+                    navItems[key].style.display = currentUser.role === 'Administrador' ? '' : 'none';
+                } else {
+                    navItems[key].style.display = hasPermission(key, 'view') ? '' : 'none';
+                }
             }
         });
 
@@ -1812,7 +1816,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function renderPermissionsTable(userId) {
-        permTableBody.innerHTML = '';
+        if (!userId) {
+            permTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 3rem; color: var(--text-muted);"><i data-lucide="user-plus" style="width:48px; height:48px; opacity: 0.2; margin-bottom: 1rem; display:block; margin-inline:auto;"></i> Seleccione un usuario para gestionar sus permisos</td></tr>';
+            lucide.createIcons();
+            return;
+        }
+        permTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2rem;"><i data-lucide="loader-2" class="spin"></i> Cargando permisos...</td></tr>';
+        lucide.createIcons();
+
         let userPerms = [];
         if (userId) {
             try {
