@@ -58,6 +58,7 @@
                 <li data-view="notifications" id="nav-notifications-view"><i
                         data-lucide="bell-ring"></i><span>Notificaciones</span></li>
                 <li data-view="users" id="nav-users"><i data-lucide="users"></i><span>Usuarios</span></li>
+                <li data-view="permissions" id="nav-permissions"><i data-lucide="shield-check"></i><span>Permisos</span></li>
             </ul>
             <div class="sidebar-bottom">
                 <div class="user-profile">
@@ -305,6 +306,37 @@
                     </div>
                 </div>
                 <div class="notifications-list" id="notifications-full-list"></div>
+            </section>
+
+            <!-- VIEW: PERMISSIONS -->
+            <section id="view-permissions" class="view hidden">
+                <div class="section-toolbar">
+                    <div class="form-group" style="flex: 1; max-width: 400px; margin-bottom: 0;">
+                        <label for="perm-user-select">Seleccionar Usuario</label>
+                        <select id="perm-user-select" class="full-width">
+                            <option value="">Seleccione un usuario...</option>
+                        </select>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="btn btn-primary" id="btn-save-permissions"><i data-lucide="save"></i> Guardar Permisos</button>
+                    </div>
+                </div>
+                <div class="permissions-table-wrapper card">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Módulo / Pantalla</th>
+                                <th style="text-align: center;">Ver</th>
+                                <th style="text-align: center;">Crear</th>
+                                <th style="text-align: center;">Editar (Guardar)</th>
+                                <th style="text-align: center;">Eliminar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="permissions-table-body">
+                            <!-- Dynamic content -->
+                        </tbody>
+                    </table>
+                </div>
             </section>
         </main>
     </div>

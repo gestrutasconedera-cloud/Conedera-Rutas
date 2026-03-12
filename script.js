@@ -6,14 +6,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =============================================
     // CONFIGURACIÓN DE PRODUCCIÓN
     // =============================================
-const API_BASE = window.location.origin.includes('localhost') 
-    ? 'http://localhost:5000/api' 
-    : 'https://conedera-rutas.onrender.com/api';
-    
+    const API_BASE = window.location.origin.includes('localhost')
+        ? 'http://localhost:5000/api'
+        : 'https://conedera-rutas.onrender.com/api';
+
     const apiCall = (path, opts = {}) => fetch(API_BASE + path, {
         headers: { 'Content-Type': 'application/json' },
         ...opts
-    }).then(r => r.json()).catch(e => {
+    }).then(r => r.json()).then(data => {
+        // If it was a mutation (POST, PUT, DELETE), trigger a sync
+        if (data.success && opts.method && ['POST', 'PUT', 'DELETE'].includes(opts.method.toUpperCase())) {
+            initAppFromDB();
+        }
+        return data;
+    }).catch(e => {
         console.error('API Error:', e);
         return { success: false, error: e.message };
     });
@@ -110,7 +116,7 @@ const API_BASE = window.location.origin.includes('localhost')
     const loginError = document.getElementById('login-error');
     const appContainer = document.getElementById('app-container');
 
-    loginForm.addEventListener('submit', e => {
+    loginForm.addEventListener('submit', async e => {
         e.preventDefault();
         const email = document.getElementById('login-email').value.trim();
         const pwd = document.getElementById('login-password').value;
@@ -132,6 +138,13 @@ const API_BASE = window.location.origin.includes('localhost')
         if (user) {
             console.log('✅ Login exitoso:', user.name);
             currentUser = user;
+            // Fetch user permissions
+            try {
+                const pRes = await fetch(API_BASE + '/permissions/' + user.id);
+                const pData = await pRes.json();
+                if (pData.success) currentUser.permissions = pData.data;
+            } catch (err) { console.error('Error fetching permissions:', err); }
+
             sessionStorage.setItem('loggedUserId', user.id);
             loginError.style.display = 'none';
             initApp();
@@ -230,9 +243,8 @@ const API_BASE = window.location.origin.includes('localhost')
                     }
                 }
             } catch (e) { console.warn('Task synchronization error:', e); }
-        }, 50000);
+        }, 15000);
 
-        // History synchronization every 30 seconds as requested
         setInterval(async () => {
             try {
                 const res = await fetch(API_BASE + '/completed-tasks');
@@ -244,7 +256,7 @@ const API_BASE = window.location.origin.includes('localhost')
                     }
                 }
             } catch (e) { console.warn('History synchronization error:', e); }
-        }, 30000);
+        }, 15000);
 
         // Add manual sync listener for monitoring
         const btnSync = document.getElementById('btn-sync-monitoring');
@@ -289,47 +301,70 @@ const API_BASE = window.location.origin.includes('localhost')
     // =============================================
     // ROLE-BASED UI SETUP
     // =============================================
+    function hasPermission(module, action) {
+        if (!currentUser) return false;
+        if (currentUser.role === 'Administrador') return true;
+        if (!currentUser.permissions) return false;
+        const p = currentUser.permissions.find(x => x.menu_option === module);
+        if (!p) return false;
+        if (action === 'view') return p.can_view;
+        if (action === 'create') return p.can_create;
+        if (action === 'edit') return p.can_edit;
+        if (action === 'delete') return p.can_delete;
+        return false;
+    }
+
     function setupRoleUI() {
         // Sidebar profile
         document.getElementById('sidebar-name').textContent = currentUser.name;
         document.getElementById('sidebar-role').textContent = currentUser.role;
         document.getElementById('sidebar-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=4f46e5&color=fff`;
 
-        // Nav items
-        const navUsers = document.getElementById('nav-users');
-        navUsers.style.display = currentUser.role === 'Administrador' ? '' : 'none';
+        // Nav items - Dynamic based on permissions
+        const navItems = {
+            'pending': document.querySelector('[data-view="pending"]'),
+            'completed': document.querySelector('[data-view="completed"]'),
+            'warehouse': document.querySelector('[data-view="warehouse"]'),
+            'vehicles': document.getElementById('nav-vehicles'),
+            'monitoring': document.getElementById('nav-monitoring'),
+            'notifications': document.getElementById('nav-notifications-view'),
+            'users': document.getElementById('nav-users'),
+            'permissions': document.getElementById('nav-permissions')
+        };
 
-        // Pending actions (create task, export) - admin/supervisor only
-        const pendingActions = document.getElementById('pending-admin-actions');
-        pendingActions.style.display = isAdmin() ? '' : 'none';
+        Object.keys(navItems).forEach(key => {
+            if (navItems[key]) {
+                navItems[key].style.display = hasPermission(key, 'view') ? '' : 'none';
+            }
+        });
 
-        // Completed actions
-        const completedActions = document.getElementById('completed-admin-actions');
-        if (completedActions) completedActions.style.display = isAdmin() ? '' : 'none';
+        // Specific actions (Create/Edit/Delete)
+        const btnCreateTask = document.getElementById('btn-create-task');
+        if (btnCreateTask) btnCreateTask.style.display = hasPermission('pending', 'create') ? '' : 'none';
 
-        // Warehouse form - hide for everyone as per request (conductors use modal)
-        const whForm = document.getElementById('warehouse-form-container');
-        if (whForm) whForm.style.display = 'none';
+        const exportPending = document.getElementById('btn-export-pending');
+        if (exportPending) exportPending.style.display = hasPermission('pending', 'view') ? '' : 'none';
 
-        // E/S Create button - only for Conductor
         const btnCreateMov = document.getElementById('btn-create-movement');
-        if (btnCreateMov) btnCreateMov.style.display = isConductor() ? '' : 'none';
+        if (btnCreateMov) btnCreateMov.style.display = hasPermission('warehouse', 'create') ? '' : 'none';
 
-        // Vehicles nav - admin/supervisor only
-        const navVehicles = document.getElementById('nav-vehicles');
-        navVehicles.style.display = isAdmin() ? '' : 'none';
+        const btnCreateVehicle = document.getElementById('btn-create-vehicle');
+        if (btnCreateVehicle) btnCreateVehicle.style.display = hasPermission('vehicles', 'create') ? '' : 'none';
 
-        // Vehicles admin actions
-        const vehActions = document.getElementById('vehicles-admin-actions');
-        if (vehActions) vehActions.style.display = isAdmin() ? '' : 'none';
+        const btnCreateUser = document.getElementById('btn-create-user');
+        if (btnCreateUser) btnCreateUser.style.display = hasPermission('users', 'create') ? '' : 'none';
 
-        // Monitoring nav - admin/supervisor only
-        const navMonitoring = document.getElementById('nav-monitoring');
-        navMonitoring.style.display = isAdmin() ? '' : 'none';
+        const btnComposeNotif = document.getElementById('btn-compose-notif');
+        if (btnComposeNotif) btnComposeNotif.style.display = hasPermission('notifications', 'create') ? '' : 'none';
 
-        // Notifications admin actions (compose notif)
-        const notifActions = document.getElementById('notif-admin-actions');
-        if (notifActions) notifActions.style.display = isAdmin() ? '' : 'none';
+        // Admin-only areas
+        const pActions = document.getElementById('pending-admin-actions');
+        if (pActions) pActions.style.display = (isAdmin() || hasPermission('pending', 'create')) ? '' : 'none';
+
+        const cActions = document.getElementById('completed-admin-actions');
+        if (cActions) cActions.style.display = (isAdmin() || hasPermission('completed', 'view')) ? '' : 'none';
+
+        lucide.createIcons();
     }
 
     // =============================================
@@ -338,7 +373,7 @@ const API_BASE = window.location.origin.includes('localhost')
     const navLinks = document.querySelectorAll('.nav-links li');
     const views = document.querySelectorAll('.view');
     const pageTitle = document.getElementById('page-title');
-    const titles = { 'pending': 'Tareas Pendientes', 'completed': 'Historial de Entregas', 'warehouse': 'Control E/S Transportista', 'vehicles': 'Gestión de Vehículos', 'monitoring': 'Monitoreo de Vehículos', 'notifications': 'Centro de Notificaciones', 'users': 'Gestión de Usuarios' };
+    const titles = { 'pending': 'Tareas Pendientes', 'completed': 'Historial de Entregas', 'warehouse': 'Control E/S Transportista', 'vehicles': 'Gestión de Vehículos', 'monitoring': 'Monitoreo de Vehículos', 'notifications': 'Centro de Notificaciones', 'users': 'Gestión de Usuarios', 'permissions': 'Gestión de Permisos' };
 
     navLinks.forEach(link => {
         link.addEventListener('click', () => {
@@ -1748,6 +1783,110 @@ const API_BASE = window.location.origin.includes('localhost')
     });
 
     // =============================================
+    // PERMISSIONS MANAGEMENT
+    // =============================================
+    const appModules = [
+        { id: 'pending', name: '📦 Pendientes' },
+        { id: 'completed', name: '✅ Realizadas' },
+        { id: 'warehouse', name: '🏬 E/S Transportista' },
+        { id: 'vehicles', name: '🚛 Vehículos' },
+        { id: 'monitoring', name: '📍 Monitoreo' },
+        { id: 'notifications', name: '🔔 Notificaciones' },
+        { id: 'users', name: '👥 Usuarios' },
+        { id: 'permissions', name: '🛡️ Permisos' }
+    ];
+
+    const permUserSelect = document.getElementById('perm-user-select');
+    const permTableBody = document.getElementById('permissions-table-body');
+    const btnSavePerms = document.getElementById('btn-save-permissions');
+
+    function initPermissionsView() {
+        permUserSelect.innerHTML = '<option value="">Seleccione un usuario...</option>';
+        users.sort((a, b) => a.name.localeCompare(b.name)).forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.id;
+            opt.textContent = `${u.name} (${u.role})`;
+            permUserSelect.appendChild(opt);
+        });
+        renderPermissionsTable(null);
+    }
+
+    async function renderPermissionsTable(userId) {
+        permTableBody.innerHTML = '';
+        let userPerms = [];
+        if (userId) {
+            try {
+                const res = await fetch(API_BASE + '/permissions/' + userId);
+                const data = await res.json();
+                if (data.success) userPerms = data.data;
+            } catch (e) { console.error('Error fetching perms:', e); }
+        }
+
+        appModules.forEach(mod => {
+            const p = userPerms.find(x => x.menu_option === mod.id) || { can_view: false, can_create: false, can_edit: false, can_delete: false };
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${mod.name}</strong></td>
+                <td style="text-align:center;"><input type="checkbox" data-mod="${mod.id}" data-action="can_view" ${p.can_view ? 'checked' : ''}></td>
+                <td style="text-align:center;"><input type="checkbox" data-mod="${mod.id}" data-action="can_create" ${p.can_create ? 'checked' : ''}></td>
+                <td style="text-align:center;"><input type="checkbox" data-mod="${mod.id}" data-action="can_edit" ${p.can_edit ? 'checked' : ''}></td>
+                <td style="text-align:center;"><input type="checkbox" data-mod="${mod.id}" data-action="can_delete" ${p.can_delete ? 'checked' : ''}></td>
+            `;
+            permTableBody.appendChild(tr);
+        });
+    }
+
+    permUserSelect.addEventListener('change', () => {
+        renderPermissionsTable(permUserSelect.value);
+    });
+
+    btnSavePerms.addEventListener('click', async () => {
+        const userId = permUserSelect.value;
+        if (!userId) { alert('Seleccione un usuario primero'); return; }
+
+        const permsToSave = [];
+        appModules.forEach(mod => {
+            permsToSave.push({
+                menu_option: mod.id,
+                can_view: document.querySelector(`input[data-mod="${mod.id}"][data-action="can_view"]`).checked,
+                can_create: document.querySelector(`input[data-mod="${mod.id}"][data-action="can_create"]`).checked,
+                can_edit: document.querySelector(`input[data-mod="${mod.id}"][data-action="can_edit"]`).checked,
+                can_delete: document.querySelector(`input[data-mod="${mod.id}"][data-action="can_delete"]`).checked,
+            });
+        });
+
+        btnSavePerms.disabled = true;
+        btnSavePerms.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Guardando...';
+
+        try {
+            const res = await fetch(API_BASE + '/permissions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, permissions: permsToSave })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('✅ Permisos guardados correctamente');
+                // If we edited current user, update local permissions
+                if (parseInt(userId) === currentUser.id) {
+                    currentUser.permissions = permsToSave;
+                    setupRoleUI();
+                }
+            } else {
+                alert('❌ Error al guardar: ' + data.error);
+            }
+        } catch (e) { alert('❌ Error de red: ' + e.message); }
+        btnSavePerms.disabled = false;
+        btnSavePerms.innerHTML = '<i data-lucide="save"></i> Guardar Permisos';
+        lucide.createIcons();
+    });
+
+    // Hook into nav click
+    document.querySelector('[data-view="permissions"]').addEventListener('click', () => {
+        initPermissionsView();
+    });
+
+    // =============================================
     // ESCAPE KEY
     // =============================================
     document.addEventListener('keydown', e => {
@@ -1768,7 +1907,3 @@ const API_BASE = window.location.origin.includes('localhost')
         }
     });
 });
-
-
-
-
