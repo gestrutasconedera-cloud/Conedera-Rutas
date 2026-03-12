@@ -179,7 +179,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         initNotifications();
         // Ask conductors for GPS permission
         if (isConductor()) requestDriverGPS();
-        if (isConductor()) requestDriverGPS();
         // Constant sync for notifications and GPS
         setInterval(async () => {
             try {
@@ -197,7 +196,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Check for new notifications targeted at the current user
                     const userNewNotifs = newNotifs.filter(n => {
                         const isNew = n.id > oldMaxId;
-                        const isForMe = n.targetUserIds.length === 0 || n.targetUserIds.includes(currentUser.id);
+                        const targetIds = n.targetUserIds || [];
+                        const isForMe = targetIds.length === 0 || targetIds.includes(currentUser.id);
                         return isNew && isForMe;
                     });
 
@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (userNewNotifs.length > 0) {
                         // Play sound or show alert
                         const lastOne = userNewNotifs[0];
-                        alert(`🔔 NUEVA NOTIFICACIÓN:\nDe: ${lastOne.from}\n${lastOne.message}`);
+                        alert(`🔔 NUEVA NOTIFICACIÓN:\nDe: ${lastOne.from_user || 'Sistema'}\n${lastOne.message}`);
                     }
 
                     if (document.getElementById('notif-dropdown').style.display !== 'none') {
@@ -422,16 +422,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         newMov.id = Date.now();
         movements.unshift(newMov);
-        apiCall('/movements', { method: 'POST', body: JSON.stringify(newMov) }).then(d => { if (d && d.success) newMov.id = d.id; });
-        renderMovements();
-
         const btn = warehouseForm.querySelector('button');
         const orig = btn.textContent;
         btn.textContent = 'Procesando...'; btn.disabled = true;
-        setTimeout(() => {
-            btn.textContent = '¡Registrado!'; btn.style.backgroundColor = 'var(--success)';
-            setTimeout(() => { btn.textContent = orig; btn.style.backgroundColor = ''; btn.disabled = false; warehouseForm.reset(); }, 1500);
-        }, 800);
+
+        apiCall('/movements', { method: 'POST', body: JSON.stringify(newMov) })
+            .then(d => {
+                if (d && d.success) {
+                    newMov.id = d.id;
+                    btn.textContent = '¡Registrado!'; btn.style.backgroundColor = 'var(--success)';
+                    setTimeout(() => { btn.textContent = orig; btn.style.backgroundColor = ''; btn.disabled = false; warehouseForm.reset(); }, 1500);
+                    renderMovements();
+                } else {
+                    btn.textContent = 'Error'; btn.style.backgroundColor = 'var(--danger)';
+                    setTimeout(() => { btn.textContent = orig; btn.style.backgroundColor = ''; btn.disabled = false; }, 2000);
+                }
+            })
+            .catch(err => {
+                console.error('Movement error:', err);
+                btn.textContent = 'Error Red'; btn.disabled = false;
+            });
     });
 
     // =============================================
@@ -699,7 +709,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Then DELETE (soft-delete) the original task
-            const delRes = await apiCall('/tasks/' + completingTaskId, { method: 'DELETE' });
+            const delRes = await apiCall('/tasks/' + completingTaskId, {
+                method: 'DELETE',
+                body: JSON.stringify({
+                    deletedBy: currentUser.name,
+                    deletedAt: getNowFormatted()
+                })
+            });
             if (!delRes || !delRes.success) {
                 alert('La tarea se guardó en historial, pero no se pudo eliminar de pendientes: ' + (delRes?.error || 'Error desconocido'));
             }
@@ -1606,15 +1622,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =============================================
     // NOTIFICATION SYSTEM
     // =============================================
-    function addNotification(type, message, from, targetUserIds) {
+    function addNotification(type, message, from_user, targetUserIds) {
         const notif = {
             id: Date.now(),
             type, // info, warning, urgent, task
             message,
-            from: from || 'Sistema',
+            from_user: from_user || 'Sistema',
             targetUserIds: targetUserIds || [], // empty = all users
             date: getNowFormatted(),
-            read: false
+            is_read: false
         };
         notif.id = Date.now();
         notifications.unshift(notif);
@@ -1626,12 +1642,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     function getUserNotifications() {
         if (!currentUser) return [];
         return notifications.filter(n => {
-            return n.targetUserIds.length === 0 || n.targetUserIds.includes(currentUser.id);
+            const targets = n.targetUserIds || [];
+            return targets.length === 0 || targets.includes(currentUser.id);
         });
     }
 
     function getUnreadCount() {
-        return getUserNotifications().filter(n => !n.read).length;
+        return getUserNotifications().filter(n => !n.is_read).length;
     }
 
     function updateNotifBadge() {
@@ -1656,15 +1673,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         list.innerHTML = '';
         userNotifs.forEach(n => {
             const div = document.createElement('div');
-            div.className = `notif-item ${n.read ? '' : 'unread'}`;
+            div.className = `notif-item ${n.is_read ? '' : 'unread'}`;
             div.innerHTML = `
                 <div class="notif-icon ${n.type}">${getNotifIcon(n.type)}</div>
                 <div class="notif-content">
                     <div class="notif-text">${n.message}</div>
-                    <div class="notif-from">${n.from}</div>
+                    <div class="notif-from">${n.from_user || 'Sistema'}</div>
                     <div class="notif-time">${n.date}</div>
                 </div>`;
-            div.addEventListener('click', () => { n.read = true; updateNotifBadge(); renderNotifDropdown(); apiCall('/notifications/read/' + n.id, { method: 'PUT' }); });
+            div.addEventListener('click', () => { n.is_read = true; updateNotifBadge(); renderNotifDropdown(); apiCall('/notifications/read/' + n.id, { method: 'PUT' }); });
             list.appendChild(div);
         });
     }
@@ -1673,7 +1690,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const list = document.getElementById('notifications-full-list');
         const userNotifs = getUserNotifications();
         document.getElementById('stat-notif-total').textContent = userNotifs.length;
-        document.getElementById('stat-notif-unread').textContent = userNotifs.filter(n => !n.read).length;
+        document.getElementById('stat-notif-unread').textContent = userNotifs.filter(n => !n.is_read).length;
         if (userNotifs.length === 0) {
             list.innerHTML = '<div class="notif-empty"><i data-lucide="bell-off"></i><h3>Sin notificaciones</h3><p>Las alertas y mensajes aparecerán aquí</p></div>';
             lucide.createIcons(); return;
@@ -1681,18 +1698,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         list.innerHTML = '';
         userNotifs.forEach(n => {
             const div = document.createElement('div');
-            div.className = `notif-full-item ${n.read ? '' : 'unread'}`;
+            div.className = `notif-full-item ${n.is_read ? '' : 'unread'}`;
             div.innerHTML = `
                 <div class="notif-icon ${n.type}">${getNotifIcon(n.type)}</div>
                 <div class="notif-content">
                     <div class="notif-text">${n.message}</div>
                     <div class="notif-meta">
-                        <span>De: ${n.from}</span>
+                        <span>De: ${n.from_user || 'Sistema'}</span>
                         <span>${n.date}</span>
-                        <span>${n.read ? '✔ Leída' : '● No leída'}</span>
+                        <span>${n.is_read ? '✔ Leída' : '● No leída'}</span>
                     </div>
                 </div>`;
-            div.addEventListener('click', () => { n.read = true; renderNotificationsPage(); updateNotifBadge(); renderNotifDropdown(); apiCall('/notifications/read/' + n.id, { method: 'PUT' }); });
+            div.addEventListener('click', () => { n.is_read = true; renderNotificationsPage(); updateNotifBadge(); renderNotifDropdown(); apiCall('/notifications/read/' + n.id, { method: 'PUT' }); });
             list.appendChild(div);
         });
     }
@@ -1720,7 +1737,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Mark all read
     document.getElementById('btn-mark-all-read').addEventListener('click', () => {
-        getUserNotifications().forEach(n => n.read = true);
+        getUserNotifications().forEach(n => n.is_read = true);
         apiCall('/notifications/read-all', { method: 'PUT', body: '{}' });
         updateNotifBadge();
         renderNotifDropdown();
