@@ -112,6 +112,7 @@ app.post('/api/tasks', async (req, res) => {
             const message = `🚨 Tarea de Alta Prioridad #${taskId}: "${description}" para ${client}. Sector: ${sector}`;
             const dateStr = new Date().toLocaleString('es-ES');
             await supabase.from('notifications').insert([{ type: 'task', message, from_user: 'Sistema', targetUserIds: targetIds, date: dateStr, is_read: false }]);
+            sendPushNotification(targetIds, message);
         }
 
         res.json({ success: true, id: taskId });
@@ -234,9 +235,51 @@ app.post('/api/notifications', async (req, res) => {
         const { type, message, from_user, targetUserIds, date, read } = req.body;
         const { data, error } = await supabase.from('notifications').insert([{ type, message, from_user, targetUserIds, date, is_read: !!read }]).select();
         if (error) throw error;
+
+        // Trigger Push Notification
+        sendPushNotification(targetUserIds, message);
+
         res.json({ success: true, id: data[0].id });
     } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
+
+// Helper for Push Notifications via Expo
+const sendPushNotification = async (targetUserIds, messageBody) => {
+    try {
+        let targetTokens = [];
+        if (!targetUserIds || targetUserIds.length === 0) {
+            const { data } = await supabase.from('user_push_tokens').select('push_token');
+            if (data) targetTokens = data.map(t => t.push_token);
+        } else {
+            const { data } = await supabase.from('user_push_tokens').select('push_token').in('user_id', targetUserIds);
+            if (data) targetTokens = data.map(t => t.push_token);
+        }
+
+        if (targetTokens.length === 0) return;
+
+        const messages = targetTokens.map(token => ({
+            to: token,
+            sound: 'default',
+            body: messageBody,
+            title: 'CONEDERA - Notificación'
+        }));
+
+        // Use dynamic import for node-fetch if needed, but modern Node has global fetch
+        const response = await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Accept-encoding': 'gzip, deflate',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(messages),
+        });
+        const result = await response.json();
+        console.log('Expo Push Response:', result);
+    } catch (e) {
+        console.error('Error sending push notification:', e);
+    }
+};
 
 app.put('/api/notifications/read/:id', async (req, res) => {
     try {
@@ -268,6 +311,48 @@ app.post('/api/gps', async (req, res) => {
         console.error('GPS Save Error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
+});
+
+// ---- RUTAS PARA PERMISSIONS ----
+app.get('/api/permissions/:userId', async (req, res) => {
+    try {
+        const { data, error } = await supabase.from('permissions').select('*').eq('user_id', req.params.userId);
+        if (error) throw error;
+        res.json({ success: true, data: data });
+    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+app.post('/api/permissions', async (req, res) => {
+    try {
+        const { user_id, permissions } = req.body;
+        // permissions should be an array of { menu_option, can_view, can_create, can_edit, can_delete }
+        for (const p of permissions) {
+            const { error } = await supabase.from('permissions').upsert({
+                user_id,
+                menu_option: p.menu_option,
+                can_view: p.can_view,
+                can_create: p.can_create,
+                can_edit: p.can_edit,
+                can_delete: p.can_delete
+            }, { onConflict: 'user_id, menu_option' });
+            if (error) throw error;
+        }
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+// ---- RUTAS PARA PUSH TOKENS ----
+app.post('/api/push-tokens', async (req, res) => {
+    try {
+        const { user_id, token, device_type } = req.body;
+        const { error } = await supabase.from('user_push_tokens').upsert({
+            user_id,
+            push_token: token,
+            device_type
+        }, { onConflict: 'user_id, push_token' });
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 app.get('/api/gps', async (req, res) => {
