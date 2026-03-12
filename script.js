@@ -517,19 +517,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div></div>
                     <div class="task-footer-right">
                         ${isActive ?
-                        `<button class="btn btn-primary btn-complete-task" data-task-id="${task.id}"><i data-lucide="clipboard-check"></i> Completar Entrega</button>` :
+                        (hasPermission('pending', 'edit') ? `<button class="btn btn-primary btn-complete-task" data-task-id="${task.id}"><i data-lucide="clipboard-check"></i> Completar Entrega</button>` : '') :
                         `<button class="btn btn-disabled" disabled><i data-lucide="lock"></i> Tarea Inactiva</button>`
                     }
                     </div></div>`;
             } else {
                 footerHTML = `<div class="task-footer">
                     <div class="task-footer-left">
-                        <label class="toggle-switch" title="${isActive ? 'Desactivar' : 'Activar'}"><input type="checkbox" ${isActive ? 'checked' : ''} data-toggle-id="${task.id}"><span class="toggle-slider"></span></label>
+                        <label class="toggle-switch" title="${isActive ? 'Desactivar' : 'Activar'}"><input type="checkbox" ${isActive ? 'checked' : ''} data-toggle-id="${task.id}" ${hasPermission('pending', 'edit') ? '' : 'disabled'}><span class="toggle-slider"></span></label>
                         <span class="toggle-label">${isActive ? 'Activo' : 'Inactivo'}</span>
                     </div>
                     <div class="task-footer-right">
-                        <button class="btn-delete" data-id="${task.id}"><i data-lucide="trash-2"></i> Eliminar</button>
-                        <button class="btn btn-primary">${isActive ? 'Iniciar Entrega' : 'Reactivar'}</button>
+                        ${hasPermission('pending', 'delete') ? `<button class="btn-delete" data-id="${task.id}"><i data-lucide="trash-2"></i> Eliminar</button>` : ''}
+                        ${hasPermission('pending', 'edit') ? `<button class="btn btn-primary" onclick="alert('Funcionalidad de inicio en desarrollo')">${isActive ? 'Iniciar Entrega' : 'Reactivar'}</button>` : ''}
                     </div></div>`;
             }
 
@@ -861,8 +861,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         document.getElementById('cd-photo-count').textContent = t.fotos ? t.fotos.length : 0;
 
-        // Role-based: admin can edit, others view only
-        const canEdit = isAdmin();
+        // Role-based permissions
+        const canEdit = hasPermission('completed', 'edit');
         document.querySelectorAll('.cd-field').forEach(f => {
             f.disabled = !canEdit;
             f.readOnly = !canEdit;
@@ -1187,8 +1187,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td><span class="password-masked">${'•'.repeat(user.password ? user.password.length : 4)}</span></td>
                 <td><span class="role-badge role-${rc}">${user.role}</span></td>
                 <td>${user.email}</td><td>${user.createdAt}</td><td>${user.createdBy}</td><td>${mod}</td>
-                <td><div class="task-footer-left"><label class="toggle-switch"><input type="checkbox" ${isA ? 'checked' : ''} data-user-toggle="${user.id}"><span class="toggle-slider"></span></label></div></td>
-                <td><div class="table-actions"><button class="btn-edit" data-user-edit="${user.id}"><i data-lucide="pencil"></i></button><button class="btn-delete" data-user-delete="${user.id}"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+                <td><div class="task-footer-left"><label class="toggle-switch"><input type="checkbox" ${isA ? 'checked' : ''} data-user-toggle="${user.id}" ${hasPermission('users', 'edit') ? '' : 'disabled'}><span class="toggle-slider"></span></label></div></td>
+                <td><div class="table-actions">
+                    ${hasPermission('users', 'edit') ? `<button class="btn-edit" data-user-edit="${user.id}"><i data-lucide="pencil"></i></button>` : ''}
+                    ${hasPermission('users', 'delete') ? `<button class="btn-delete" data-user-delete="${user.id}"><i data-lucide="trash-2"></i></button>` : ''}
+                </div></td></tr>`;
         });
         html += '</tbody></table>';
         usersWrapper.innerHTML = html;
@@ -1361,8 +1364,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td>${fotoHtml}</td>
                 <td><strong>${v.modelo}</strong></td>
                 <td><span class="role-badge role-conductor">${v.placa}</span></td>
-                <td><div class="task-footer-left"><label class="toggle-switch"><input type="checkbox" ${isA ? 'checked' : ''} data-veh-toggle="${v.id}"><span class="toggle-slider"></span></label></div></td>
-                <td><div class="table-actions"><button class="btn-edit" data-veh-edit="${v.id}"><i data-lucide="pencil"></i></button><button class="btn-delete" data-veh-delete="${v.id}"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+                <td><div class="task-footer-left"><label class="toggle-switch"><input type="checkbox" ${isA ? 'checked' : ''} data-veh-toggle="${v.id}" ${hasPermission('vehicles', 'edit') ? '' : 'disabled'}><span class="toggle-slider"></span></label></div></td>
+                <td><div class="table-actions">
+                    ${hasPermission('vehicles', 'edit') ? `<button class="btn-edit" data-veh-edit="${v.id}"><i data-lucide="pencil"></i></button>` : ''}
+                    ${hasPermission('vehicles', 'delete') ? `<button class="btn-delete" data-veh-delete="${v.id}"><i data-lucide="trash-2"></i></button>` : ''}
+                </div></td></tr>`;
         });
         html += '</tbody></table>';
         vehiclesWrapper.innerHTML = html;
@@ -1789,16 +1795,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =============================================
     // PERMISSIONS MANAGEMENT
     // =============================================
-    const appModules = [
-        { id: 'pending', name: '📦 Pendientes' },
-        { id: 'completed', name: '✅ Realizadas' },
-        { id: 'warehouse', name: '🏬 E/S Transportista' },
-        { id: 'vehicles', name: '🚛 Vehículos' },
-        { id: 'monitoring', name: '📍 Monitoreo' },
-        { id: 'notifications', name: '🔔 Notificaciones' },
-        { id: 'users', name: '👥 Usuarios' },
-        { id: 'permissions', name: '🛡️ Permisos' }
-    ];
+    function getAppModules() {
+        const modules = [];
+        document.querySelectorAll('.nav-links li').forEach(li => {
+            const id = li.getAttribute('data-view');
+            const name = li.innerText.trim();
+            if (id) modules.push({ id, name });
+        });
+        return modules;
+    }
 
     const permUserSelect = document.getElementById('perm-user-select');
     const permTableBody = document.getElementById('permissions-table-body');
@@ -1833,6 +1838,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch (e) { console.error('Error fetching perms:', e); }
         }
 
+        const appModules = getAppModules();
         appModules.forEach(mod => {
             const p = userPerms.find(x => x.menu_option === mod.id) || { can_view: false, can_create: false, can_edit: false, can_delete: false };
             const tr = document.createElement('tr');
@@ -1847,7 +1853,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Select All Column functionality
+    ['view', 'create', 'edit', 'delete'].forEach(action => {
+        const headerCk = document.getElementById(`perm-all-${action}`);
+        if (headerCk) {
+            headerCk.addEventListener('change', () => {
+                document.querySelectorAll(`input[data-action="can_${action}"]`).forEach(ck => {
+                    ck.checked = headerCk.checked;
+                });
+            });
+        }
+    });
+
     permUserSelect.addEventListener('change', () => {
+        // Reset header checkboxes
+        document.querySelectorAll('thead input[type="checkbox"]').forEach(ck => ck.checked = false);
         renderPermissionsTable(permUserSelect.value);
     });
 
@@ -1856,40 +1876,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!userId) { alert('Seleccione un usuario primero'); return; }
 
         const permsToSave = [];
+        const appModules = getAppModules();
         appModules.forEach(mod => {
-            permsToSave.push({
-                menu_option: mod.id,
-                can_view: document.querySelector(`input[data-mod="${mod.id}"][data-action="can_view"]`).checked,
-                can_create: document.querySelector(`input[data-mod="${mod.id}"][data-action="can_create"]`).checked,
-                can_edit: document.querySelector(`input[data-mod="${mod.id}"][data-action="can_edit"]`).checked,
-                can_delete: document.querySelector(`input[data-mod="${mod.id}"][data-action="can_delete"]`).checked,
-            });
+            const ckView = document.querySelector(`input[data-mod="${mod.id}"][data-action="can_view"]`);
+            const ckCreate = document.querySelector(`input[data-mod="${mod.id}"][data-action="can_create"]`);
+            const ckEdit = document.querySelector(`input[data-mod="${mod.id}"][data-action="can_edit"]`);
+            const ckDelete = document.querySelector(`input[data-mod="${mod.id}"][data-action="can_delete"]`);
+
+            if (ckView) {
+                permsToSave.push({
+                    menu_option: mod.id,
+                    can_view: ckView.checked,
+                    can_create: ckCreate ? ckCreate.checked : false,
+                    can_edit: ckEdit ? ckEdit.checked : false,
+                    can_delete: ckDelete ? ckDelete.checked : false,
+                });
+            }
         });
 
         btnSavePerms.disabled = true;
         btnSavePerms.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Guardando...';
 
         try {
-            const res = await fetch(API_BASE + '/permissions', {
+            const data = await apiCall('/permissions', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, permissions: permsToSave })
             });
-            const data = await res.json();
-            if (data.success) {
+
+            if (data && data.success) {
                 alert('✅ Permisos guardados correctamente');
-                // If we edited current user, update local permissions
                 if (parseInt(userId) === currentUser.id) {
                     currentUser.permissions = permsToSave;
                     setupRoleUI();
                 }
             } else {
-                alert('❌ Error al guardar: ' + data.error);
+                throw new Error(data ? data.error : 'Error desconocido');
             }
-        } catch (e) { alert('❌ Error de red: ' + e.message); }
-        btnSavePerms.disabled = false;
-        btnSavePerms.innerHTML = '<i data-lucide="save"></i> Guardar Permisos';
-        lucide.createIcons();
+        } catch (err) {
+            console.error('Error saving perms:', err);
+            alert('❌ Error al guardar permisos: ' + err.message + '\n\nNota: Si el error es 404, asegúrese de que el backend esté actualizado en Render.');
+        } finally {
+            btnSavePerms.disabled = false;
+            btnSavePerms.innerHTML = '<i data-lucide="save"></i> Guardar Permisos';
+            lucide.createIcons();
+        }
     });
 
     // Hook into nav click
