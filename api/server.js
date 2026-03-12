@@ -232,8 +232,8 @@ app.get('/api/notifications', async (req, res) => {
 
 app.post('/api/notifications', async (req, res) => {
     try {
-        const { type, message, from_user, targetUserIds, date, read } = req.body;
-        const { data, error } = await supabase.from('notifications').insert([{ type, message, from_user, targetUserIds, date, is_read: !!read }]).select();
+        const { type, message, from_user, targetUserIds, date, is_read } = req.body;
+        const { data, error } = await supabase.from('notifications').insert([{ type, message, from_user, targetUserIds, date, is_read: !!is_read }]).select();
         if (error) throw error;
 
         // Trigger Push Notification
