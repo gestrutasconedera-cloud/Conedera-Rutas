@@ -1,0 +1,34 @@
+# =============================================
+# ARCHIVOS SENSIBLES (NUNCA SUBIR)
+# =============================================
+api/.env
+
+# =============================================
+# DEPENDENCIAS (se reinstalan con npm install)
+# =============================================
+api/node_modules/
+mobile/node_modules/
+node_modules/
+
+# =============================================
+# CARPETAS GENERADAS AUTOMÁTICAMENTE
+# =============================================
+# Esta carpeta se genera con "npm run build:apk"
+mobile/www/
+
+# Fotos subidas por usuarios en producción
+api/uploads/
+
+# =============================================
+# ARCHIVOS DE SISTEMA Y EDITORES
+# =============================================
+.DS_Store
+Thumbs.db
+.idea/
+*.log
+*.tmp
+
+# =============================================
+# CARPETA DE EXPO (no se usa en este proyecto)
+# =============================================
+app/
