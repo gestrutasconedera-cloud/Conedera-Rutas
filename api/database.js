@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 require('dotenv').config();
 const { Pool } = require('pg');
 
@@ -31,3 +32,20 @@ pool.on('error', (err) => {
 console.log(`🔌 Conexión configurada para base de datos PostgreSQL en host: ${config.host || 'DATABASE_URL'}`);
 
 module.exports = pool;
+=======
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+    console.error('❌ ERROR: Supabase URL or Key missing in .env');
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+console.log('✅ Supabase client initialized.');
+
+module.exports = supabase;
+>>>>>>> 4d2301ed1f859106948feb68c62bf985d0f8d5aa

@@ -1,10 +1,10 @@
 # =============================================
-# ARCHIVOS SENSIBLES (NUNCA SUBIR)
+# ARCHIVOS SENSIBLES - NUNCA SUBIR
 # =============================================
 api/.env
 
 # =============================================
-# DEPENDENCIAS (se reinstalan con npm install)
+# DEPENDENCIAS - se reinstalan con npm install
 # =============================================
 api/node_modules/
 mobile/node_modules/
@@ -13,10 +13,10 @@ node_modules/
 # =============================================
 # CARPETAS GENERADAS AUTOMÁTICAMENTE
 # =============================================
-# Esta carpeta se genera con "npm run build:apk"
+# Esta carpeta se regenera con "npm run build:apk"
 mobile/www/
 
-# Fotos subidas por usuarios en producción
+# Fotos subidas por usuarios (datos de producción)
 api/uploads/
 
 # =============================================

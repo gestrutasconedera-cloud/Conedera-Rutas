@@ -6,42 +6,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =============================================
     // CONFIGURACIÓN DE PRODUCCIÓN
     // =============================================
-    const API_BASE = (window.location.origin.includes('localhost') || window.location.origin.includes('192.168.'))
-        ? 'http://192.168.1.123:5000/api'
+    const API_BASE = window.location.origin.includes('localhost')
+        ? 'http://localhost:5000/api'
         : 'https://conedera-rutas.onrender.com/api';
 
-    const getAuthHeaders = () => {
-        const token = sessionStorage.getItem('authToken');
-        return token ? { 'Authorization': `Bearer ${token}` } : {};
-    };
-
-    const logoutUser = () => {
-        sessionStorage.removeItem('authToken');
-        sessionStorage.removeItem('currentUser');
-        sessionStorage.removeItem('loggedUserId');
-        if (gpsTrackingInterval) { clearInterval(gpsTrackingInterval); gpsTrackingInterval = null; }
-        currentUser = null;
-        appContainer.style.display = 'none';
-        loginScreen.style.display = 'flex';
-        document.getElementById('login-form').reset();
-        loginError.style.display = 'none';
-        lucide.createIcons();
-    };
-
     const apiCall = (path, opts = {}) => fetch(API_BASE + path, {
-        ...opts,
-        headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders(),
-            ...(opts.headers || {})
-        }
-    }).then(r => {
-        if (r.status === 401 || r.status === 403) {
-            logoutUser();
-            throw new Error('Sesión expirada o no autorizada');
-        }
-        return r.json();
-    }).then(data => {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts
+    }).then(r => r.json()).then(data => {
         // If it was a mutation (POST, PUT, DELETE), trigger a sync
         if (data.success && opts.method && ['POST', 'PUT', 'DELETE'].includes(opts.method.toUpperCase())) {
             initAppFromDB();
@@ -81,18 +53,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('🔄 Sincronizando con la API:', API_BASE);
         const fetchRes = async (path, setter) => {
             try {
-                const res = await fetch(API_BASE + path, {
-                    headers: getAuthHeaders()
-                });
-                if (res.status === 401 || res.status === 403) {
-                    logoutUser();
-                    throw new Error('Sesión expirada o no autorizada');
-                }
+                const res = await fetch(API_BASE + path);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 if (data.success && data.data) setter(data.data);
             } catch (e) {
                 console.error('❌ Error cargando ' + path, e);
+                // Si falla el login por red, mostraremos el error en la UI
+                if (path === '/users') {
+                    const errorEl = document.getElementById('login-error');
+                    if (errorEl) {
+                        errorEl.textContent = 'Error de conexión con el servidor. Reintente en unos segundos.';
+                        errorEl.style.display = 'flex';
+                    }
+                }
             }
         };
         await Promise.all([
@@ -105,6 +79,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         ]);
         console.log('✅ BD Sincronizada');
     }
+
+    await initAppFromDB();
 
 
     // =============================================
@@ -147,31 +123,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         console.log('🔑 Intento de login para:', email);
 
-        try {
-            const res = await fetch(API_BASE + '/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password: pwd })
-            });
+        if (users.length === 0) {
+            loginError.textContent = 'La base de datos aún no ha cargado. Espere un momento.';
+            loginError.style.display = 'flex';
+            return;
+        }
 
-            const data = await res.json();
-            if (data.success && data.token && data.user) {
-                console.log('✅ Login exitoso:', data.user.name);
-                currentUser = data.user;
-                sessionStorage.setItem('authToken', data.token);
-                sessionStorage.setItem('loggedUserId', data.user.id);
-                sessionStorage.setItem('currentUser', JSON.stringify(data.user));
-                
-                loginError.style.display = 'none';
-                
-                await initAppFromDB();
-                initApp();
-            } else {
-                throw new Error(data.error || 'Usuario o contraseña incorrectos.');
-            }
-        } catch (err) {
-            console.warn('❌ Falló la autenticación:', err.message);
-            loginError.textContent = err.message || 'Error de conexión con el servidor. Reintente en unos segundos.';
+        const user = users.find(u =>
+            u.email.toLowerCase() === email.toLowerCase() &&
+            u.password === pwd &&
+            (u.status === 'activo' || !u.status)
+        );
+
+        if (user) {
+            console.log('✅ Login exitoso:', user.name);
+            currentUser = user;
+            // Fetch user permissions
+            try {
+                const pRes = await fetch(API_BASE + '/permissions/' + user.id);
+                const pData = await pRes.json();
+                if (pData.success) currentUser.permissions = pData.data;
+            } catch (err) { console.error('Error fetching permissions:', err); }
+
+            sessionStorage.setItem('loggedUserId', user.id);
+            loginError.style.display = 'none';
+            initApp();
+        } else {
+            console.warn('❌ Credenciales incorrectas o usuario inactivo');
+            loginError.textContent = 'Usuario o contraseña incorrectos.';
             loginError.style.display = 'flex';
             loginScreen.querySelector('.login-card').classList.add('shake');
             setTimeout(() => loginScreen.querySelector('.login-card').classList.remove('shake'), 600);
@@ -179,20 +158,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Auto-login from session
-    (async () => {
-        const savedToken = sessionStorage.getItem('authToken');
-        const savedUserStr = sessionStorage.getItem('currentUser');
-        if (savedToken && savedUserStr) {
-            try {
-                currentUser = JSON.parse(savedUserStr);
-                await initAppFromDB();
-                initApp();
-            } catch (err) {
-                console.error('Error auto-logging in:', err);
-                logoutUser();
-            }
+    const savedId = sessionStorage.getItem('loggedUserId');
+    if (savedId) {
+        const u = users.find(u => u.id === parseInt(savedId));
+        if (u && (u.status === 'activo' || !u.status)) {
+            currentUser = u;
+            initApp();
         }
-    })();
+    }
 
     function initApp() {
         loginScreen.style.display = 'none';
@@ -210,8 +183,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         setInterval(async () => {
             try {
                 const [notifRes, gpsRes] = await Promise.all([
-                    fetch(API_BASE + '/notifications', { headers: getAuthHeaders() }),
-                    fetch(API_BASE + '/gps', { headers: getAuthHeaders() })
+                    fetch(API_BASE + '/notifications'),
+                    fetch(API_BASE + '/gps')
                 ]);
                 const notifData = await notifRes.json();
                 const gpsData = await gpsRes.json();
@@ -261,7 +234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         setInterval(async () => {
             try {
-                const res = await fetch(API_BASE + '/tasks', { headers: getAuthHeaders() });
+                const res = await fetch(API_BASE + '/tasks');
                 const data = await res.json();
                 if (data.success && data.data) {
                     tasks = data.data;
@@ -274,7 +247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         setInterval(async () => {
             try {
-                const res = await fetch(API_BASE + '/completed-tasks', { headers: getAuthHeaders() });
+                const res = await fetch(API_BASE + '/completed-tasks');
                 const data = await res.json();
                 if (data.success && data.data) {
                     completedTasks = data.data;
@@ -295,7 +268,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 await initAppFromDB(); // Reload all data
                 // Also trigger immediate GPS sync
-                const res = await fetch(API_BASE + '/gps', { headers: getAuthHeaders() });
+                const res = await fetch(API_BASE + '/gps');
                 const data = await res.json();
                 if (data.success) {
                     driverLocations = data.data;
@@ -315,7 +288,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Logout
     document.getElementById('btn-logout').addEventListener('click', () => {
-        logoutUser();
+        sessionStorage.removeItem('loggedUserId');
+        if (gpsTrackingInterval) { clearInterval(gpsTrackingInterval); gpsTrackingInterval = null; }
+        currentUser = null;
+        appContainer.style.display = 'none';
+        loginScreen.style.display = 'flex';
+        document.getElementById('login-form').reset();
+        loginError.style.display = 'none';
+        lucide.createIcons();
     });
 
     // =============================================
@@ -1869,7 +1849,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let userPerms = [];
         if (userId) {
             try {
-                const res = await fetch(API_BASE + '/permissions/' + userId, { headers: getAuthHeaders() });
+                const res = await fetch(API_BASE + '/permissions/' + userId);
                 const data = await res.json();
                 if (data.success) userPerms = data.data;
             } catch (e) { console.error('Error fetching perms:', e); }
