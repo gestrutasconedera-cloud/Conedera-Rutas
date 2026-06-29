@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -609,7 +608,6 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 PostgreSQL Powered Server running at http://0.0.0.0:${PORT}`);
 });
-=======
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -987,4 +985,3 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Supabase Powered Server running at http://0.0.0.0:${PORT}`);
 });
->>>>>>> 4d2301ed1f859106948feb68c62bf985d0f8d5aa
