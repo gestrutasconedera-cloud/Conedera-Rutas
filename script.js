@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =============================================
     const API_BASE = window.location.origin.includes('localhost')
         ? 'http://localhost:5000/api'
-        : '186.101.216.45:5432';
+        : '186.101.216.45:5432/api';
 
     const apiCall = (path, opts = {}) => fetch(API_BASE + path, {
         headers: { 'Content-Type': 'application/json' },
